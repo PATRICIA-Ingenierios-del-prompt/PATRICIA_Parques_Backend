@@ -27,6 +27,8 @@ public class ParquesWebSocketController {
 
     private static final int[] EXIT_POSITIONS = {4, 21, 55, 38};
     private static final String[] COLORS = {"AMARILLO", "AZUL", "VERDE", "ROJO"};
+    private static final String BROKER_PREFIX = "/exchange";
+    private static final String RABBIT_EXCHANGE = "amq.topic";
 
     /** Executor de un solo hilo para turnos de bot. No bloquea el handler de WebSocket. */
     private final ExecutorService botExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -304,7 +306,7 @@ public class ParquesWebSocketController {
     private void broadcast(String gameId) {
         try {
             Game game = gameRepository.findById(gameId);
-            messagingTemplate.convertAndSend("/topic/game/" + gameId, GameResponse.from(game));
+            messagingTemplate.convertAndSend(brokerDestination("game." + gameId), GameResponse.from(game));
         } catch (Exception ignored) {}
     }
 
@@ -320,7 +322,11 @@ public class ParquesWebSocketController {
 
     @MessageExceptionHandler({IllegalStateException.class, IllegalArgumentException.class})
     public void handleDomainError(RuntimeException ex) {
-        messagingTemplate.convertAndSend("/topic/errors", Map.of("error", ex.getMessage()));
+        messagingTemplate.convertAndSend(brokerDestination("errors"), Map.of("error", ex.getMessage()));
+    }
+
+    private String brokerDestination(String routingKey) {
+        return BROKER_PREFIX + "/" + RABBIT_EXCHANGE + "/" + routingKey;
     }
 
     // ─── DTO de entrada para addBot ───────────────────────────────────────────
