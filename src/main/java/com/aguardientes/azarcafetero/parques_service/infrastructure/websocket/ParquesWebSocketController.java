@@ -12,7 +12,8 @@ import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dt
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+// SimpMessagingTemplate ya no se inyecta aca: los broadcasts pasan por
+// ParquesBroadcaster, que decide backplane (Redis) vs local segun config.
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
@@ -43,7 +44,7 @@ public class ParquesWebSocketController {
     private final PassTurnUseCase passTurnUseCase;
     private final ExitJailUseCase exitJailUseCase;
     private final GameRepository gameRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ParquesBroadcaster broadcaster;
     private final ParquesBotDecisionService botDecisionService;
     private final HttpWalletClient httpWalletClient;
 
@@ -55,7 +56,7 @@ public class ParquesWebSocketController {
             PassTurnUseCase passTurnUseCase,
             ExitJailUseCase exitJailUseCase,
             GameRepository gameRepository,
-            SimpMessagingTemplate messagingTemplate,
+            ParquesBroadcaster broadcaster,
             ParquesBotDecisionService botDecisionService,
             HttpWalletClient httpWalletClient) {
         this.createGameUseCase  = Objects.requireNonNull(createGameUseCase);
@@ -64,7 +65,7 @@ public class ParquesWebSocketController {
         this.passTurnUseCase    = Objects.requireNonNull(passTurnUseCase);
         this.exitJailUseCase    = Objects.requireNonNull(exitJailUseCase);
         this.gameRepository     = Objects.requireNonNull(gameRepository);
-        this.messagingTemplate  = Objects.requireNonNull(messagingTemplate);
+        this.broadcaster        = Objects.requireNonNull(broadcaster);
         this.botDecisionService = Objects.requireNonNull(botDecisionService);
         this.httpWalletClient = Objects.requireNonNull(httpWalletClient);
     }
@@ -306,7 +307,7 @@ public class ParquesWebSocketController {
     private void broadcast(String gameId) {
         try {
             Game game = gameRepository.findById(gameId);
-            messagingTemplate.convertAndSend(brokerDestination("game." + gameId), GameResponse.from(game));
+            broadcaster.send(brokerDestination("game." + gameId), GameResponse.from(game));
         } catch (Exception ignored) {}
     }
 
@@ -322,7 +323,7 @@ public class ParquesWebSocketController {
 
     @MessageExceptionHandler({IllegalStateException.class, IllegalArgumentException.class})
     public void handleDomainError(RuntimeException ex) {
-        messagingTemplate.convertAndSend(brokerDestination("errors"), Map.of("error", ex.getMessage()));
+        broadcaster.send(brokerDestination("errors"), Map.of("error", ex.getMessage()));
     }
 
     private String brokerDestination(String routingKey) {

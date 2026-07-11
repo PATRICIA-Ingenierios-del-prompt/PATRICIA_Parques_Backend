@@ -62,6 +62,9 @@ class WebSocketBotEngineTest {
     private ExitJailUseCase exitJailUseCase;
 
     @Mock private SimpMessagingTemplate messagingTemplate;
+    // Backplane apagado: el broadcaster solo delega al template, verify() sigue funcionando.
+    @Mock private org.springframework.beans.factory.ObjectProvider<
+            com.aguardientes.azarcafetero.parques_service.infrastructure.backplane.RedisBackplanePublisher> backplaneProvider;
     @Mock private EventPublisher eventPublisher;
     @Mock private HttpWalletClient walletClient;
 
@@ -78,10 +81,15 @@ class WebSocketBotEngineTest {
         ParquesBotDecisionService botService =
                 new ParquesBotDecisionService(new Random(123));
 
+        // lenient: hay tests que salen antes de tocar el broadcaster (p.ej.
+        // whenGameDoesNotExist_*), asi Mockito strict marcaria el stub como
+        // "unnecessary". Es un stub por-suite, no por-test.
+        org.mockito.Mockito.lenient().when(backplaneProvider.getIfAvailable()).thenReturn(null);
+        ParquesBroadcaster broadcaster = new ParquesBroadcaster(messagingTemplate, backplaneProvider);
         controller = new ParquesWebSocketController(
                 createGameUseCase, rollDiceUseCase, movePieceUseCase,
                 passTurnUseCase,   exitJailUseCase,  gameRepository,
-                messagingTemplate, botService,       walletClient);
+                broadcaster,       botService,       walletClient);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

@@ -49,6 +49,13 @@ class ParquesWebSocketControllerExtendedTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    // Con el backplane apagado, el broadcaster solo delega al template, asi
+    // que verify(messagingTemplate).convertAndSend(...) sigue capturando los
+    // envios como antes -- no hay que reescribir los verify existentes.
+    @Mock
+    private org.springframework.beans.factory.ObjectProvider<
+            com.aguardientes.azarcafetero.parques_service.infrastructure.backplane.RedisBackplanePublisher> backplaneProvider;
+
     @Mock
     private EventPublisher eventPublisher;
 
@@ -66,6 +73,11 @@ class ParquesWebSocketControllerExtendedTest {
 
         ParquesBotDecisionService botService = new ParquesBotDecisionService(new Random(42));
 
+        // lenient: hay tests que no tocan el broadcaster (p.ej. leaveGame),
+        // asi Mockito strict marcaria el stub como "unnecessary".
+        org.mockito.Mockito.lenient().when(backplaneProvider.getIfAvailable()).thenReturn(null);
+        ParquesBroadcaster broadcaster = new ParquesBroadcaster(messagingTemplate, backplaneProvider);
+
         controller = new ParquesWebSocketController(
                 createGameUseCase,
                 rollDiceUseCase,
@@ -73,7 +85,7 @@ class ParquesWebSocketControllerExtendedTest {
                 passTurnUseCase,
                 exitJailUseCase,
                 gameRepository,
-                messagingTemplate,
+                broadcaster,
                 botService,
                 walletClient
         );
@@ -329,13 +341,13 @@ class ParquesWebSocketControllerExtendedTest {
     @Test
     void handleDomainError_shouldBroadcastError() {
         controller.handleDomainError(new IllegalStateException("Test error"));
-        verify(messagingTemplate).convertAndSend(eq("/topic/errors"), any(Object.class));
+        verify(messagingTemplate).convertAndSend(eq("/exchange/amq.topic/errors"), any(Object.class));
     }
 
     @Test
     void handleDomainError_shouldHandleIllegalArgumentException() {
         controller.handleDomainError(new IllegalArgumentException("Arg error"));
-        verify(messagingTemplate).convertAndSend(eq("/topic/errors"), any(Object.class));
+        verify(messagingTemplate).convertAndSend(eq("/exchange/amq.topic/errors"), any(Object.class));
     }
 
     // ─── AddBotRequest record ─────────────────────────────────────────────────
