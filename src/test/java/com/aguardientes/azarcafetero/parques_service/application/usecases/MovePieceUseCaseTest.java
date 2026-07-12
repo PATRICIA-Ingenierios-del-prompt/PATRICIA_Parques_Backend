@@ -5,7 +5,6 @@ import com.aguardientes.azarcafetero.parques_service.domain.model.Piece;
 import com.aguardientes.azarcafetero.parques_service.domain.model.Player;
 import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher;
 import com.aguardientes.azarcafetero.parques_service.domain.ports.GameRepository;
-import com.aguardientes.azarcafetero.parques_service.infrastructure.HttpWalletClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,9 +25,6 @@ class MovePieceUseCaseTest {
     @Mock
     private EventPublisher eventPublisher;
 
-    @Mock
-    private HttpWalletClient walletClient;
-
     private MovePieceUseCase useCase;
 
     private Game game;
@@ -37,7 +33,7 @@ class MovePieceUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new MovePieceUseCase(repository, eventPublisher, walletClient);
+        useCase = new MovePieceUseCase(repository, eventPublisher);
 
         p1 = new Player("p1", "Karol", "AMARILLO", 4);
         p2 = new Player("p2", "Juan", "AZUL", 21);

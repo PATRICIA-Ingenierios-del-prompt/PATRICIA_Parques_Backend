@@ -1,0 +1,68 @@
+# Defaults para el chart de Parques. El job de CD sobreescribe image.repository
+# e image.tag en cada deploy (fijado al SHA corto del commit); todo lo demas se
+# edita aqui y se versiona junto con el codigo que configura.
+#
+# NAMING: infra usa "parques" en TODO - ECR (patricia-dev/parques), IRSA
+# (patricia-dev-parques-irsa), secret patricia-dev/parques/mongodb, backplane
+# channel patricia:backplane:parques. spring.application.name=parques-service,
+# puerto 8085 (OJO: NO 8086 - el Dockerfile decia 8086 por error, corregido).
+#
+# SOCKET MS: Parques esta en var.socket_services (infra), o sea que necesita el
+# backplane Redis (Cluster #2). El SecurityGroupPolicy del tier "socket"
+# (patricia-app-socket-pods) ya existe en Ulink_Infra desde el deploy de
+# Location (2026-07-11), asi que los pods de este chart obtienen la ruta de red
+# al Cluster #2 automaticamente por la label patricia.io/sg-tier: socket.
+#
+# ESTADO EN MEMORIA (seguimiento pendiente): InMemoryGameRepository guarda las
+# partidas en memoria, NO en Mongo. Con replicaCount=2 cada pod tiene su propio
+# estado; el backplane solo replica broadcasts de juego en vivo (dados/fichas/
+# turnos cross-pod SI funcionan), pero una partida creada en un pod no es
+# visible via REST desde otro pod. La persistencia en Mongo (secret patricia-
+# dev/parques/mongodb, ya provisionado) es un follow-up: agregar spring-boot-
+# starter-data-mongodb + persistir el repo, y recien ahi cablear
+# SPRING_DATA_MONGODB_URI en el ExternalSecret de abajo.
+#
+image:
+  repository: ""            # set by CD: <account>.dkr.ecr.<region>.amazonaws.com/patricia-dev/parques
+  tag: ""                   # set by CD: short commit SHA
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  # Reutiliza el rol IRSA pre-provisionado (module.eks.service_irsa["parques"]).
+  # Sin policy de permisos todavia (Parques no llama APIs de AWS via IRSA hoy -
+  # RabbitMQ/Redis por Security Group; el wallet externo es HTTP con API key, no
+  # IAM). Dejar vacio hasta que se necesite una llamada real a un API de AWS.
+  roleArn: ""
+
+config:
+  # No sensible.
+  # --- Backplane (Redis Cluster #2, pub/sub compartido entre MS de sockets) ---
+  # Habilitado desde el arranque: SG policy "socket" ya existe (con Location) y
+  # TLS en el Lettuce factory ya esta cubierto en BackplaneConfig (useSsl +
+  # disablePeerVerification).
+  backplaneEnabled: "true"
+  backplaneChannel: "patricia:backplane:parques"
+
+externalSecrets:
+  clusterSecretStore: patricia-aws-secrets-manager
+  prefix: "patricia-dev"
+  # Secretos referenciados (todos ya existen en AWS Secrets Manager):
+  #   patricia-dev/amazon-mq       -> SPRING_RABBITMQ_ADDRESSES/USERNAME/PASSWORD
+  #   patricia-dev/backplane-redis -> BACKPLANE_REDIS_HOST/PORT/PASSWORD
+  #
+  # Parques NO usa cache Redis (Cluster #1) - solo el backplane; por eso NO se
+  # cablea patricia-dev/cache-redis.
+  #
+  # patricia-dev/parques/mongodb (SPRING_DATA_MONGODB_URI) existe pero NO se
+  # cablea todavia (in-memory, ver nota "ESTADO EN MEMORIA" arriba).
+
+resources:
+  requests: { cpu: 500m, memory: 768Mi }
+  limits:   { cpu: "1",  memory: 1Gi }
+
+hpa:
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70

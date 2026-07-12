@@ -7,7 +7,6 @@ import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher
 import com.aguardientes.azarcafetero.parques_service.domain.ports.GameRepository;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDecisionService;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDifficulty;
-import com.aguardientes.azarcafetero.parques_service.infrastructure.HttpWalletClient;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.InMemoryGameRepository;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dto.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,15 +58,12 @@ class ParquesWebSocketControllerExtendedTest {
     @Mock
     private EventPublisher eventPublisher;
 
-    @Mock
-    private HttpWalletClient walletClient;
-
     @BeforeEach
     void setUp() {
         gameRepository = new InMemoryGameRepository();
         createGameUseCase = new CreateGameUseCase(gameRepository);
         rollDiceUseCase = new RollDiceUseCase(gameRepository, eventPublisher);
-        movePieceUseCase = new MovePieceUseCase(gameRepository, eventPublisher, walletClient);
+        movePieceUseCase = new MovePieceUseCase(gameRepository, eventPublisher);
         passTurnUseCase = new PassTurnUseCase(gameRepository);
         exitJailUseCase = new ExitJailUseCase(gameRepository);
 
@@ -86,8 +82,7 @@ class ParquesWebSocketControllerExtendedTest {
                 exitJailUseCase,
                 gameRepository,
                 broadcaster,
-                botService,
-                walletClient
+                botService
         );
     }
 
@@ -189,17 +184,6 @@ class ParquesWebSocketControllerExtendedTest {
         Game game = gameRepository.findById("game-start");
         assertTrue(game.getState().name().equals("IN_PROGRESS"));
         verify(messagingTemplate, atLeastOnce()).convertAndSend(anyString(), any(Object.class));
-    }
-
-    @Test
-    void startGame_shouldCallPlaceBetForHumanPlayers() {
-        var pd1 = new CreateGameMessage.PlayerInfo(); pd1.setId("h1"); pd1.setName("H1");
-        var pd2 = new CreateGameMessage.PlayerInfo(); pd2.setId("h2"); pd2.setName("H2");
-        controller.createGame(makeCreateMsg("game-bet", List.of(pd1, pd2)));
-
-        controller.startGame("game-bet");
-
-        verify(walletClient, times(2)).placeBet(anyString(), eq(100));
     }
 
     // ─── rollDice ────────────────────────────────────────────────────────────
