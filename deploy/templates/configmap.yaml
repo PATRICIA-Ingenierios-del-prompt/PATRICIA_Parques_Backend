@@ -1,0 +1,11 @@
+# Configuracion no sensible. Credenciales de RabbitMQ / Redis backplane vienen
+# del Secret parques-secrets sincronizado por el ExternalSecret (ver
+# externalsecret.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: parques-config
+  namespace: patricia-app
+data:
+  BACKPLANE_ENABLED: {{ .Values.config.backplaneEnabled | quote }}
+  BACKPLANE_CHANNEL: {{ .Values.config.backplaneChannel | quote }}

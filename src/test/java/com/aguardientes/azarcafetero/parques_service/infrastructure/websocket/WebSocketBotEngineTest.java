@@ -7,7 +7,6 @@ import com.aguardientes.azarcafetero.parques_service.domain.model.Player;
 import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDecisionService;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDifficulty;
-import com.aguardientes.azarcafetero.parques_service.infrastructure.HttpWalletClient;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.InMemoryGameRepository;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dto.CreateGameMessage;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dto.ExitJailMessage;
@@ -62,15 +61,17 @@ class WebSocketBotEngineTest {
     private ExitJailUseCase exitJailUseCase;
 
     @Mock private SimpMessagingTemplate messagingTemplate;
+    // Backplane apagado: el broadcaster solo delega al template, verify() sigue funcionando.
+    @Mock private org.springframework.beans.factory.ObjectProvider<
+            com.aguardientes.azarcafetero.parques_service.infrastructure.backplane.RedisBackplanePublisher> backplaneProvider;
     @Mock private EventPublisher eventPublisher;
-    @Mock private HttpWalletClient walletClient;
 
     @BeforeEach
     void setUp() {
         gameRepository    = new InMemoryGameRepository();
         createGameUseCase = new CreateGameUseCase(gameRepository);
         rollDiceUseCase   = new RollDiceUseCase(gameRepository, eventPublisher);
-        movePieceUseCase  = new MovePieceUseCase(gameRepository, eventPublisher, walletClient);
+        movePieceUseCase  = new MovePieceUseCase(gameRepository, eventPublisher);
         passTurnUseCase   = new PassTurnUseCase(gameRepository);
         exitJailUseCase   = new ExitJailUseCase(gameRepository);
 
@@ -78,10 +79,15 @@ class WebSocketBotEngineTest {
         ParquesBotDecisionService botService =
                 new ParquesBotDecisionService(new Random(123));
 
+        // lenient: hay tests que salen antes de tocar el broadcaster (p.ej.
+        // whenGameDoesNotExist_*), asi Mockito strict marcaria el stub como
+        // "unnecessary". Es un stub por-suite, no por-test.
+        org.mockito.Mockito.lenient().when(backplaneProvider.getIfAvailable()).thenReturn(null);
+        ParquesBroadcaster broadcaster = new ParquesBroadcaster(messagingTemplate, backplaneProvider);
         controller = new ParquesWebSocketController(
                 createGameUseCase, rollDiceUseCase, movePieceUseCase,
                 passTurnUseCase,   exitJailUseCase,  gameRepository,
-                messagingTemplate, botService,       walletClient);
+                broadcaster,       botService);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -323,8 +329,8 @@ class WebSocketBotEngineTest {
         // Forzar a que el current al iniciar sea el bot
         setField(game, "currentTurn", 1);
 
-        // startGame intenta hacer placeBet de humanos (sólo h1) y luego dispara
-        // triggerBotTurnIfNeeded → submit al executor → corre en hilo aparte.
+        // startGame dispara triggerBotTurnIfNeeded → submit al executor →
+        // corre en hilo aparte.
         controller.startGame("g-exec");
 
         // Esperamos a que el executor procese (con timeout)

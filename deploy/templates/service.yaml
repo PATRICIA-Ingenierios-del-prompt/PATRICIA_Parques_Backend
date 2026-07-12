@@ -1,0 +1,15 @@
+# Nombre `parques` (matches ECR/IRSA/secret naming en infra). Si el RouteConfig
+# del Gateway espera otro hostname in-cluster para este MS, revisa que el
+# Service in-cluster coincida.
+apiVersion: v1
+kind: Service
+metadata:
+  name: parques
+  namespace: patricia-app
+  labels: { app: parques }
+spec:
+  type: ClusterIP
+  selector: { app: parques }
+  ports:
+    - port: 8085
+      targetPort: 8085

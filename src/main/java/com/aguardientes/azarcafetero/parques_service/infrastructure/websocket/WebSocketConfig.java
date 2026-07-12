@@ -10,24 +10,9 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final ParquesRabbitProperties rabbitProperties;
-
-    public WebSocketConfig(ParquesRabbitProperties rabbitProperties) {
-        this.rabbitProperties = rabbitProperties;
-    }
-
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        var brokerRelay = config.enableStompBrokerRelay("/exchange");
-        brokerRelay.setRelayHost(rabbitProperties.relayHost());
-        brokerRelay.setRelayPort(rabbitProperties.relayPort());
-        brokerRelay.setClientLogin(rabbitProperties.clientLogin());
-        brokerRelay.setClientPasscode(rabbitProperties.clientPasscode());
-        brokerRelay.setSystemLogin(rabbitProperties.systemLogin());
-        brokerRelay.setSystemPasscode(rabbitProperties.systemPasscode());
-        brokerRelay.setVirtualHost(rabbitProperties.virtualHost());
-        brokerRelay.setAutoStartup(rabbitProperties.autoStartup());
-
+        config.enableSimpleBroker("/exchange", "/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
     }
@@ -35,7 +20,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/parques-ws")
-            .setAllowedOriginPatterns("*")
-            .withSockJS();
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 }

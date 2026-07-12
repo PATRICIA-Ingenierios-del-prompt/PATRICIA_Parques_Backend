@@ -5,7 +5,6 @@ import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher
 import com.aguardientes.azarcafetero.parques_service.domain.ports.GameRepository;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDecisionService;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -34,8 +33,8 @@ public class GameConfig {
     }
 
     @Bean
-    public MovePieceUseCase movePieceUseCase(GameRepository gameRepository, EventPublisher eventPublisher, HttpWalletClient httpWalletClient) {
-        return new MovePieceUseCase(gameRepository, eventPublisher, httpWalletClient);
+    public MovePieceUseCase movePieceUseCase(GameRepository gameRepository, EventPublisher eventPublisher) {
+        return new MovePieceUseCase(gameRepository, eventPublisher);
     }
 
     @Bean
@@ -46,15 +45,5 @@ public class GameConfig {
     @Bean
     public ExitJailUseCase exitJailUseCase(GameRepository gameRepository) {
         return new ExitJailUseCase(gameRepository);
-    }
-    @Value("${lobby.service.url}")
-    private String lobbyUrl;
-
-    @Value("${internal.api.key:}")
-    private String internalApiKey;
-
-    @Bean
-    public HttpWalletClient httpWalletClient() {
-        return new HttpWalletClient(lobbyUrl, internalApiKey);
     }
 }
