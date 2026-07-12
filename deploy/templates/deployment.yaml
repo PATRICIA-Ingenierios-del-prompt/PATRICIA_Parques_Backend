@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: parques
+  namespace: patricia-app
+  # patricia.io/sg-tier: socket (NO "standard"). Parques esta en
+  # var.socket_services (infra) y necesita ademas del SG eks_pods el SG
+  # socket_ms_pods para alcanzar el backplane Redis (Cluster #2, Sec 4.1).
+  # El SecurityGroupPolicy patricia-app-socket-pods (en Ulink_Infra/
+  # security-group-policy.tf) ya asigna estos SGs a pods con esta label.
+  labels: { app: parques, patricia.io/sg-tier: socket }
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: { app: parques }
+  template:
+    metadata:
+      labels: { app: parques, patricia.io/sg-tier: socket }
+    spec:
+      serviceAccountName: parques
+      containers:
+        - name: parques
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - configMapRef: { name: parques-config }
+            - secretRef:    { name: parques-secrets }
+          # spring-boot-starter-actuator ya estaba en el pom. Parques no expone
+          # /actuator/health tras un filter chain restrictivo, asi que los probes
+          # llegan sin auth.
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8085 }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8085 }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8085 }
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -7,7 +7,6 @@ import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher
 import com.aguardientes.azarcafetero.parques_service.domain.ports.GameRepository;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDecisionService;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDifficulty;
-import com.aguardientes.azarcafetero.parques_service.infrastructure.HttpWalletClient;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.InMemoryGameRepository;
 import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dto.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,22 +48,31 @@ class ParquesWebSocketControllerExtendedTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    // Con el backplane apagado, el broadcaster solo delega al template, asi
+    // que verify(messagingTemplate).convertAndSend(...) sigue capturando los
+    // envios como antes -- no hay que reescribir los verify existentes.
     @Mock
-    private EventPublisher eventPublisher;
+    private org.springframework.beans.factory.ObjectProvider<
+            com.aguardientes.azarcafetero.parques_service.infrastructure.backplane.RedisBackplanePublisher> backplaneProvider;
 
     @Mock
-    private HttpWalletClient walletClient;
+    private EventPublisher eventPublisher;
 
     @BeforeEach
     void setUp() {
         gameRepository = new InMemoryGameRepository();
         createGameUseCase = new CreateGameUseCase(gameRepository);
         rollDiceUseCase = new RollDiceUseCase(gameRepository, eventPublisher);
-        movePieceUseCase = new MovePieceUseCase(gameRepository, eventPublisher, walletClient);
+        movePieceUseCase = new MovePieceUseCase(gameRepository, eventPublisher);
         passTurnUseCase = new PassTurnUseCase(gameRepository);
         exitJailUseCase = new ExitJailUseCase(gameRepository);
 
         ParquesBotDecisionService botService = new ParquesBotDecisionService(new Random(42));
+
+        // lenient: hay tests que no tocan el broadcaster (p.ej. leaveGame),
+        // asi Mockito strict marcaria el stub como "unnecessary".
+        org.mockito.Mockito.lenient().when(backplaneProvider.getIfAvailable()).thenReturn(null);
+        ParquesBroadcaster broadcaster = new ParquesBroadcaster(messagingTemplate, backplaneProvider);
 
         controller = new ParquesWebSocketController(
                 createGameUseCase,
@@ -73,9 +81,8 @@ class ParquesWebSocketControllerExtendedTest {
                 passTurnUseCase,
                 exitJailUseCase,
                 gameRepository,
-                messagingTemplate,
-                botService,
-                walletClient
+                broadcaster,
+                botService
         );
     }
 
@@ -177,17 +184,6 @@ class ParquesWebSocketControllerExtendedTest {
         Game game = gameRepository.findById("game-start");
         assertTrue(game.getState().name().equals("IN_PROGRESS"));
         verify(messagingTemplate, atLeastOnce()).convertAndSend(anyString(), any(Object.class));
-    }
-
-    @Test
-    void startGame_shouldCallPlaceBetForHumanPlayers() {
-        var pd1 = new CreateGameMessage.PlayerInfo(); pd1.setId("h1"); pd1.setName("H1");
-        var pd2 = new CreateGameMessage.PlayerInfo(); pd2.setId("h2"); pd2.setName("H2");
-        controller.createGame(makeCreateMsg("game-bet", List.of(pd1, pd2)));
-
-        controller.startGame("game-bet");
-
-        verify(walletClient, times(2)).placeBet(anyString(), eq(100));
     }
 
     // ─── rollDice ────────────────────────────────────────────────────────────
@@ -329,13 +325,13 @@ class ParquesWebSocketControllerExtendedTest {
     @Test
     void handleDomainError_shouldBroadcastError() {
         controller.handleDomainError(new IllegalStateException("Test error"));
-        verify(messagingTemplate).convertAndSend(eq("/topic/errors"), any(Object.class));
+        verify(messagingTemplate).convertAndSend(eq("/exchange/amq.topic/errors"), any(Object.class));
     }
 
     @Test
     void handleDomainError_shouldHandleIllegalArgumentException() {
         controller.handleDomainError(new IllegalArgumentException("Arg error"));
-        verify(messagingTemplate).convertAndSend(eq("/topic/errors"), any(Object.class));
+        verify(messagingTemplate).convertAndSend(eq("/exchange/amq.topic/errors"), any(Object.class));
     }
 
     // ─── AddBotRequest record ─────────────────────────────────────────────────

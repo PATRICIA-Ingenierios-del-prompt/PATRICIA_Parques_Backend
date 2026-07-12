@@ -12,7 +12,8 @@ import com.aguardientes.azarcafetero.parques_service.infrastructure.websocket.dt
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+// SimpMessagingTemplate ya no se inyecta aca: los broadcasts pasan por
+// ParquesBroadcaster, que decide backplane (Redis) vs local segun config.
 import org.springframework.stereotype.Controller;
 
 import java.util.List;
@@ -20,13 +21,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import com.aguardientes.azarcafetero.parques_service.infrastructure.HttpWalletClient;
 
 @Controller
 public class ParquesWebSocketController {
 
     private static final int[] EXIT_POSITIONS = {4, 21, 55, 38};
     private static final String[] COLORS = {"AMARILLO", "AZUL", "VERDE", "ROJO"};
+    private static final String BROKER_PREFIX = "/exchange";
+    private static final String RABBIT_EXCHANGE = "amq.topic";
 
     /** Executor de un solo hilo para turnos de bot. No bloquea el handler de WebSocket. */
     private final ExecutorService botExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -41,30 +43,26 @@ public class ParquesWebSocketController {
     private final PassTurnUseCase passTurnUseCase;
     private final ExitJailUseCase exitJailUseCase;
     private final GameRepository gameRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ParquesBroadcaster broadcaster;
     private final ParquesBotDecisionService botDecisionService;
-    private final HttpWalletClient httpWalletClient;
 
     public ParquesWebSocketController(
-
             CreateGameUseCase createGameUseCase,
             RollDiceUseCase rollDiceUseCase,
             MovePieceUseCase movePieceUseCase,
             PassTurnUseCase passTurnUseCase,
             ExitJailUseCase exitJailUseCase,
             GameRepository gameRepository,
-            SimpMessagingTemplate messagingTemplate,
-            ParquesBotDecisionService botDecisionService,
-            HttpWalletClient httpWalletClient) {
+            ParquesBroadcaster broadcaster,
+            ParquesBotDecisionService botDecisionService) {
         this.createGameUseCase  = Objects.requireNonNull(createGameUseCase);
         this.rollDiceUseCase    = Objects.requireNonNull(rollDiceUseCase);
         this.movePieceUseCase   = Objects.requireNonNull(movePieceUseCase);
         this.passTurnUseCase    = Objects.requireNonNull(passTurnUseCase);
         this.exitJailUseCase    = Objects.requireNonNull(exitJailUseCase);
         this.gameRepository     = Objects.requireNonNull(gameRepository);
-        this.messagingTemplate  = Objects.requireNonNull(messagingTemplate);
+        this.broadcaster        = Objects.requireNonNull(broadcaster);
         this.botDecisionService = Objects.requireNonNull(botDecisionService);
-        this.httpWalletClient = Objects.requireNonNull(httpWalletClient);
     }
 
     // ─── Mensajes existentes ──────────────────────────────────────────────────
@@ -121,17 +119,11 @@ public class ParquesWebSocketController {
     @MessageMapping("/game/{gameId}/start")
     public void startGame(@DestinationVariable String gameId) {
         Game game = gameRepository.findById(gameId);
-        
-        // Descontar apuesta a cada jugador humano
-        game.getPlayers().stream()
-            .filter(p -> !ParquesBotDecisionService.isBot(p.getId()))
-            .forEach(p -> httpWalletClient.placeBet(p.getId(), 100));
-        
         game.start();
         gameRepository.save(game);
         broadcast(gameId);
         triggerBotTurnIfNeeded(gameId);
-        }
+    }
 
     @MessageMapping("/game/{gameId}/roll")
     public void rollDice(RollDiceMessage msg, @DestinationVariable String gameId) {
@@ -304,7 +296,7 @@ public class ParquesWebSocketController {
     private void broadcast(String gameId) {
         try {
             Game game = gameRepository.findById(gameId);
-            messagingTemplate.convertAndSend("/topic/game/" + gameId, GameResponse.from(game));
+            broadcaster.send(brokerDestination("game." + gameId), GameResponse.from(game));
         } catch (Exception ignored) {}
     }
 
@@ -320,7 +312,11 @@ public class ParquesWebSocketController {
 
     @MessageExceptionHandler({IllegalStateException.class, IllegalArgumentException.class})
     public void handleDomainError(RuntimeException ex) {
-        messagingTemplate.convertAndSend("/topic/errors", Map.of("error", ex.getMessage()));
+        broadcaster.send(brokerDestination("errors"), Map.of("error", ex.getMessage()));
+    }
+
+    private String brokerDestination(String routingKey) {
+        return BROKER_PREFIX + "/" + RABBIT_EXCHANGE + "/" + routingKey;
     }
 
     // ─── DTO de entrada para addBot ───────────────────────────────────────────
