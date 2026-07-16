@@ -9,3 +9,4 @@ metadata:
 data:
   BACKPLANE_ENABLED: {{ .Values.config.backplaneEnabled | quote }}
   BACKPLANE_CHANNEL: {{ .Values.config.backplaneChannel | quote }}
+  PARQUES_PERSISTENCE: {{ .Values.config.persistence | quote }}

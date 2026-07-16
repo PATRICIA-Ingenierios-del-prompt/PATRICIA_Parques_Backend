@@ -44,6 +44,12 @@ config:
   # disablePeerVerification).
   backplaneEnabled: "true"
   backplaneChannel: "patricia:backplane:parques"
+  # --- Persistencia de partidas ---
+  # "mongo": las partidas viven en Atlas (DB "Parques") y CUALQUIER pod las
+  # recarga en cada accion; el backplane solo relaya los broadcasts STOMP.
+  # Esto reemplaza la nota "ESTADO EN MEMORIA" de arriba: multi-pod ya es
+  # consistente. "memory" queda solo para dev local/tests.
+  persistence: "mongo"
 
 externalSecrets:
   clusterSecretStore: patricia-aws-secrets-manager

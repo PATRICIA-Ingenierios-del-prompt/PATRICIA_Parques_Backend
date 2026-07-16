@@ -30,6 +30,23 @@ public class Player {
         }
     }
 
+    private Player(String id, String name, String color, int exitPosition,
+                   List<Piece> pieces, int jailAttempts, int consecutivePairs) {
+        this.id = id;
+        this.name = name;
+        this.color = color;
+        this.exitPosition = exitPosition;
+        this.pieces = new ArrayList<>(pieces);
+        this.jailAttempts = jailAttempts;
+        this.consecutivePairs = consecutivePairs;
+    }
+
+    /** Reconstruye un jugador desde persistencia con sus fichas ya jugadas. */
+    public static Player restore(String id, String name, String color, int exitPosition,
+                                 List<Piece> pieces, int jailAttempts, int consecutivePairs) {
+        return new Player(id, name, color, exitPosition, pieces, jailAttempts, consecutivePairs);
+    }
+
     public boolean hasFinished() {
         return pieces.stream().allMatch(Piece::isAtVictory);
     }

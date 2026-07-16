@@ -32,6 +32,26 @@ public class Game {
         this.players = new ArrayList<>(players);
     }
 
+    /** Reconstruye una partida completa desde persistencia (Mongo). */
+    public static Game restore(String id, List<Player> players, int currentTurn,
+                               int die1, int die2, int moveValue,
+                               boolean jailExitAvailable, boolean diceRolled,
+                               boolean die1Used, boolean die2Used,
+                               GameState state, String winnerId) {
+        Game game = new Game(id, players);
+        game.currentTurn = currentTurn;
+        game.die1 = die1;
+        game.die2 = die2;
+        game.moveValue = moveValue;
+        game.jailExitAvailable = jailExitAvailable;
+        game.diceRolled = diceRolled;
+        game.die1Used = die1Used;
+        game.die2Used = die2Used;
+        game.state = state;
+        game.winnerId = winnerId;
+        return game;
+    }
+
     // ─── Roll ────────────────────────────────────────────────────────────────
 
     public void rollDice(String playerId) {
