@@ -19,6 +19,13 @@ public class Piece {
         this.relativePosition = JAIL;
     }
 
+    /** Reconstruye una ficha desde persistencia con su posición ya jugada. */
+    public static Piece restore(String id, String color, int exitAbsolutePosition, int relativePosition) {
+        Piece piece = new Piece(id, color, exitAbsolutePosition);
+        piece.relativePosition = relativePosition;
+        return piece;
+    }
+
     public int getVictoryRelative() {
         return VICTORY_RELATIVE;
     }

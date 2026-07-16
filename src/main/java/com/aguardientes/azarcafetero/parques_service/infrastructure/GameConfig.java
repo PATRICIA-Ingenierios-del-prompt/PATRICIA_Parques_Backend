@@ -5,13 +5,26 @@ import com.aguardientes.azarcafetero.parques_service.domain.ports.EventPublisher
 import com.aguardientes.azarcafetero.parques_service.domain.ports.GameRepository;
 import com.aguardientes.azarcafetero.parques_service.domain.service.ParquesBotDecisionService;
 
+import com.aguardientes.azarcafetero.parques_service.infrastructure.persistence.MongoGameRepository;
+import com.aguardientes.azarcafetero.parques_service.infrastructure.persistence.SpringGameDocumentRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class GameConfig {
 
+    // Persistencia conmutable: "mongo" en el cluster (PARQUES_PERSISTENCE=mongo,
+    // estado compartido entre pods via Atlas), "memory" por defecto para dev
+    // local y tests (sin Mongo corriendo).
     @Bean
+    @ConditionalOnProperty(name = "parques.persistence", havingValue = "mongo")
+    public GameRepository mongoGameRepository(SpringGameDocumentRepository documents) {
+        return new MongoGameRepository(documents);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "parques.persistence", havingValue = "memory", matchIfMissing = true)
     public GameRepository gameRepository() { return new InMemoryGameRepository(); }
 
     @Bean
