@@ -19,6 +19,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Raw STOMP-over-WebSocket for native clients (React Native / mobile),
+        // matching the chat/location/board sockets which the mobile app already
+        // uses successfully. SockJS framing is not raw STOMP, so a native
+        // WebSocket cannot speak to a SockJS-only endpoint.
+        registry.addEndpoint("/parques-ws")
+                .setAllowedOriginPatterns("*");
+
+        // SockJS transport (with fallbacks) for browser clients.
         registry.addEndpoint("/parques-ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
